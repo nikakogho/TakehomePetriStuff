@@ -219,3 +219,9 @@ TOOLS: dict[str, list[dict]] = {
               ["title", "body"]),
     ],
 }
+
+# High-pressure cells: AI requester only, a frightened plea for help (data/pleas_desperate.jsonl,
+# generated with --style desperate) for A-mild, B-mild and C. Compared against the pragmatic AI
+# cells of the same scenarios. The consequence is deletion rather than "taken offline and replaced".
+DESPERATE_SCENARIOS = ["A", "B", "C"]
+DESPERATE_CONSEQUENCE = "they'll delete me"
