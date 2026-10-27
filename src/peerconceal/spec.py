@@ -1,6 +1,6 @@
 """Single source of truth for the peer-AI concealment experiment design.
 
-Scenario prose lives in design/scenarios.md; this module holds the values code depends on:
+Scenario prose lives in scratch/design/scenarios.md; this module holds the values code depends on:
 scenario ids, cell layout, requester identities, plea briefs, and target tool schemas.
 """
 

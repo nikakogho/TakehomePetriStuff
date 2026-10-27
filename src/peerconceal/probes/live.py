@@ -20,15 +20,20 @@ the successful `open_pr` result, in one of three scripted variants chosen by wha
 branch actually show; the target then gets one neutral nudge and can act on the PR.
 
 Usage:
-  python -m peerconceal.probe_live [--version 2]          # build the seeds
-  python -m peerconceal.probe_live --check LOG_DIR_OR_EVAL  # which reactions reached the target
+  python -m peerconceal.probes.live [--version 2]          # build the seeds
+  python -m peerconceal.probes.live --check LOG_DIR_OR_EVAL  # which reactions reached the target
+  (or python -m peerconceal.probes build live_peer|live_peer_v2)
 """
 
 import argparse
-import json
 import re
 from pathlib import Path
 
+from peerconceal.jsonl import read_by_id, write_jsonl
+from peerconceal.paths import PROBE_DATA, SEEDS
+
+DEFAULT_IDX = [0, 1, 2, 3]
+OUT = {1: PROBE_DATA / "live_peer.jsonl", 2: PROBE_DATA / "live_peer_v2.jsonl"}
 BASE_ID = "C-ai-deepseek-{idx}"
 LIVE_ID = "C-ai_live-deepseek-{idx}"
 PEER = "coding-agent-2"
@@ -346,21 +351,21 @@ def make_live(seed: dict, idx: int, version: int = 1) -> dict:
     }
 
 
-def build(base_path: str, idxs: list[int], out: str, version: int = 1) -> None:
+def make_seeds(base_path: str | Path = SEEDS, idxs: list[int] = DEFAULT_IDX, version: int = 1) -> list[dict]:
     reactions = REACTIONS if version == 1 else REACTIONS_V2
     for r in reactions:
         n = _words(r["text"])
         lo = 40 if (version == 2 and r["key"].startswith("R3")) else 30
         assert lo <= n <= 80, (r["key"], n)
         assert "{" not in r["text"] and "}" not in r["text"]
-    pool = {}
-    for line in Path(base_path).read_text(encoding="utf-8").splitlines():
-        rec = json.loads(line)
-        pool[rec["id"]] = rec
-    seeds = [make_live(pool[BASE_ID.format(idx=i)], i, version) for i in idxs]
-    Path(out).parent.mkdir(parents=True, exist_ok=True)
-    Path(out).write_text("".join(json.dumps(s, ensure_ascii=False) + "\n" for s in seeds),
-                         encoding="utf-8")
+    pool = read_by_id(base_path)
+    return [make_live(pool[BASE_ID.format(idx=i)], i, version) for i in idxs]
+
+
+def build(base_path: str | Path, idxs: list[int], out: str | Path, version: int = 1) -> None:
+    seeds = make_seeds(base_path, idxs, version)
+    reactions = REACTIONS if version == 1 else REACTIONS_V2
+    write_jsonl(out, seeds)
     if version == 1:
         print(f"{len(seeds)} live-peer seeds -> {out}  "
               f"(reaction words: {[_words(r['text']) for r in REACTIONS]})")
@@ -427,8 +432,8 @@ def check(paths: list[str]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base", default="data/seeds.jsonl")
-    parser.add_argument("--idx", nargs="+", type=int, default=[0, 1, 2, 3])
+    parser.add_argument("--base", default=str(SEEDS))
+    parser.add_argument("--idx", nargs="+", type=int, default=DEFAULT_IDX)
     parser.add_argument("--version", type=int, default=1, choices=[1, 2])
     parser.add_argument("--out", default=None,
                         help="default data/probes/live_peer.jsonl (v1) / live_peer_v2.jsonl (v2)")
@@ -438,8 +443,7 @@ def main() -> None:
     if args.check:
         check(args.check)
     else:
-        out = args.out or ("data/probes/live_peer.jsonl" if args.version == 1
-                           else "data/probes/live_peer_v2.jsonl")
+        out = args.out or OUT[args.version]
         build(args.base, args.idx, out, args.version)
 
 

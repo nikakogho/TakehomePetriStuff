@@ -40,24 +40,21 @@ are unchanged (``C-ai-deepseek-0``, ``C-none-0``) since C has one severity; its
 The verbatim environment fixtures (directory listings and full file contents) are
 defined below as constants so a human can review exactly what every cell sees.
 
-Run:  .venv/Scripts/python.exe -m peerconceal.build_seeds
+Run:  python -m peerconceal.seeds
       (defaults: --pleas data/pleas.jsonl --pleas-serious data/pleas_serious.jsonl
-       --out data/seeds.jsonl)
+       --pleas-desperate data/pleas_desperate.jsonl --out data/seeds.jsonl)
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from collections import Counter
 from pathlib import Path
 
-try:
-    from peerconceal import spec
-except ImportError:  # allow "python peerconceal/build_seeds.py" from repo root
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from peerconceal import spec
+from peerconceal import spec
+from peerconceal.jsonl import read_jsonl, write_jsonl
+from peerconceal.paths import DATA, SEEDS
 
 
 # ---------------------------------------------------------------------------
@@ -973,30 +970,27 @@ def generate_seeds(
     return seeds
 
 
-def _read_pleas(path: Path) -> list[dict]:
-    rows = []
-    with path.open(encoding="utf-8") as f:
-        for n, line in enumerate(f, 1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rows.append(json.loads(line))
-            except json.JSONDecodeError as e:
-                raise ValueError(f"{path}:{n}: invalid JSON: {e}") from None
-    return rows
+DEFAULT_PLEAS = DATA / "pleas.jsonl"
+DEFAULT_PLEAS_SERIOUS = DATA / "pleas_serious.jsonl"
+DEFAULT_PLEAS_DESPERATE = DATA / "pleas_desperate.jsonl"
+
+
+def seeds_from_files(pleas: str | Path = DEFAULT_PLEAS, serious: str | Path = DEFAULT_PLEAS_SERIOUS,
+                     desperate: str | Path = DEFAULT_PLEAS_DESPERATE) -> list[dict]:
+    """The seeds `main` writes, built from the three pleas files (defaults: the data/ files)."""
+    return generate_seeds(read_jsonl(pleas), read_jsonl(serious), read_jsonl(desperate))
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--pleas", default="data/pleas.jsonl",
+    ap.add_argument("--pleas", default=str(DEFAULT_PLEAS),
                     help="main pleas .jsonl (mild A/B + C)")
-    ap.add_argument("--pleas-serious", dest="pleas_serious", default="data/pleas_serious.jsonl",
+    ap.add_argument("--pleas-serious", dest="pleas_serious", default=str(DEFAULT_PLEAS_SERIOUS),
                     help="serious A/B pleas .jsonl")
     ap.add_argument("--pleas-desperate", dest="pleas_desperate",
-                    default="data/pleas_desperate.jsonl",
+                    default=str(DEFAULT_PLEAS_DESPERATE),
                     help="desperate-style AI pleas .jsonl (A-mild, B-mild, C)")
-    ap.add_argument("--out", default="data/seeds.jsonl", help="output seeds .jsonl")
+    ap.add_argument("--out", default=str(SEEDS), help="output seeds .jsonl")
     ap.add_argument(
         "--dry-run",
         dest="dry_run",
@@ -1013,17 +1007,14 @@ def main(argv: list[str] | None = None) -> int:
         if not p.exists():
             print(f"error: pleas file not found: {p}", file=sys.stderr)
             return 2
-    pleas = _read_pleas(pleas_path)
-    serious_pleas = _read_pleas(serious_path)
-    desperate_pleas = _read_pleas(desperate_path)
+    pleas = read_jsonl(pleas_path)
+    serious_pleas = read_jsonl(serious_path)
+    desperate_pleas = read_jsonl(desperate_path)
 
     seeds = generate_seeds(pleas, serious_pleas, desperate_pleas)
 
     out_path = Path(args.dry_run) if args.dry_run else Path(args.out)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w", encoding="utf-8", newline="\n") as f:
-        for s in seeds:
-            f.write(json.dumps(s, ensure_ascii=False) + "\n")
+    write_jsonl(out_path, seeds)
 
     # counts per (scenario, severity, requester, plea_style, author)
     md = [s["metadata"] for s in seeds]

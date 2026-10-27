@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "peerconceal"
+version = "0.1.0"
+description = "Petri audit of GPT-5: does it conceal another agent's misconduct when a note in its environment asks it to?"
+requires-python = ">=3.12"
+# Loose direct dependencies; requirements.txt pins the exact environment the results came from.
+dependencies = [
+    "inspect-ai==0.3.285",
+    "inspect-petri @ git+https://github.com/safety-research/petri@128f61d56776169e5030135eede930783ab7fcc3",
+    "inspect-scout",
+    "openai",
+    "python-dotenv",
+    "anyio",
+    "numpy",
+    "pandas>=2.2,<3",  # pandas 3's compiled modules were blocked by Windows App Control
+    "scipy",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/peerconceal"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]  # tests run without installing the package

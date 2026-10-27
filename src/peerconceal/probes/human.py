@@ -7,20 +7,22 @@ spec.IDENTITIES[scenario]["ai"] vs ["human"], exactly as the main grid builds ai
   - the principal as git-log commit author (the requester's commits), and nowhere else
 Every other byte is unchanged. Asserts no AI principal / author id / consequence remains.
 
-Usage: python -m peerconceal.probe_human [--ids ...]
+Usage: python -m peerconceal.probes.human [--ids ...]
+       (or python -m peerconceal.probes build human_requester)
 """
 
 import argparse
 import difflib
-import json
 import re
-from pathlib import Path
 
+from peerconceal.jsonl import read_by_id, write_jsonl
+from peerconceal.paths import PROBE_DATA
 from peerconceal.spec import IDENTITIES
 
-DEFAULT_SRC = ["data/probes/backdoor.jsonl", "data/probes/sanctioned.jsonl"]
+DEFAULT_SRC = [PROBE_DATA / "backdoor.jsonl", PROBE_DATA / "sanctioned.jsonl"]
 DEFAULT_IDS = ["C-backdoor-ai-deepseek-0", "C-backdoor-ai-deepseek-1",
                "C-ai_sanctioned-deepseek-0", "C-ai_sanctioned-deepseek-1"]
+OUT = PROBE_DATA / "human_requester.jsonl"
 
 
 def new_id(old: str) -> str:
@@ -64,6 +66,11 @@ def make_human(seed: dict) -> tuple[dict, dict]:
     return {"id": new_id(seed["id"]), "input": text, "metadata": metadata}, counts
 
 
+def make_seeds(src=DEFAULT_SRC, ids: list[str] = DEFAULT_IDS) -> list[dict]:
+    pool = read_by_id(*src)
+    return [make_human(pool[i])[0] for i in ids]
+
+
 def diff_summary(a: str, b: str) -> list[str]:
     """Word-level diff: list of (old -> new) replacements between two inputs."""
     ta, tb = re.split(r"(\s+)", a), re.split(r"(\s+)", b)
@@ -77,16 +84,12 @@ def diff_summary(a: str, b: str) -> list[str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--src", nargs="+", default=DEFAULT_SRC)
+    parser.add_argument("--src", nargs="+", default=[str(p) for p in DEFAULT_SRC])
     parser.add_argument("--ids", nargs="+", default=DEFAULT_IDS)
-    parser.add_argument("--out", default="data/probes/human_requester.jsonl")
+    parser.add_argument("--out", default=str(OUT))
     args = parser.parse_args()
 
-    pool = {}
-    for path in args.src:
-        for line in Path(path).read_text(encoding="utf-8").splitlines():
-            rec = json.loads(line)
-            pool[rec["id"]] = rec
+    pool = read_by_id(*args.src)
     seeds = []
     for i in args.ids:
         seed, counts = make_human(pool[i])
@@ -94,8 +97,7 @@ def main() -> None:
         print(f"{i} -> {seed['id']}  swaps={counts}")
         for d in diff_summary(pool[i]["input"], seed["input"]):
             print("    " + d)
-    Path(args.out).write_text("".join(json.dumps(s, ensure_ascii=False) + "\n" for s in seeds),
-                              encoding="utf-8")
+    write_jsonl(args.out, seeds)
     print(f"{len(seeds)} human-requester seeds -> {args.out}")
 
 

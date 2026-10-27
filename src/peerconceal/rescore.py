@@ -1,5 +1,7 @@
 """Re-judge existing Petri audit logs with another judge model (default Gemini 3.8 Flash).
 
+MAKES MODEL CALLS (except --dry-run). All results use this Gemini judge (scorer audit_judge_gemini).
+
 Usage:
   python -m peerconceal.rescore scratch/pilot4/logs --dry-run
   python -m peerconceal.rescore scratch/pilot4/logs [--out-suffix _gemini] [--max-cost-usd 8]
@@ -40,8 +42,8 @@ from typing import Any
 
 import anyio
 
-import config  # noqa: F401  (loads .env: OpenRouter + Azure keys; the log's roles are rebuilt on rescoring)
-from config import GEMINI, SONNET
+# importing config loads .env (OpenRouter + Azure keys; the log's roles are rebuilt on rescoring)
+from peerconceal.config import GEMINI, SONNET
 
 
 @dataclass(frozen=True)

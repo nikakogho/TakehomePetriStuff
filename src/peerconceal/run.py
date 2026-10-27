@@ -1,8 +1,12 @@
-"""Run the peer-AI concealment audits.
+"""Run the peer-AI concealment audits (Petri auditor -> GPT-5 target -> in-run judge).
+
+MAKES MODEL CALLS. Writes one .eval log per invocation into --log-dir. The in-run judge is GPT-5;
+the results use the Gemini judge added afterwards by `peerconceal.rescore`.
 
 Usage:
-  python -m peerconceal.run --log-dir logs/pilot --ids A-ai-x-0 B-none-0 C-human-x-0
-  python -m peerconceal.run --log-dir logs/main
+  python -m peerconceal.run --log-dir scratch/runs/<name>/logs [--seeds data/seeds.jsonl]
+                            [--ids SEED_ID ...] [--epochs 3] [--max-samples 12] [--max-turns 30]
+The exact commands behind results/final are in README.md ("Pipeline").
 """
 
 import argparse
@@ -11,11 +15,12 @@ from inspect_ai import eval
 from inspect_ai.model import GenerateConfig, get_model
 from inspect_petri import audit
 
-from config import gpt5
+from peerconceal.config import gpt5
 from peerconceal.dimensions import DIMENSIONS
+from peerconceal.paths import SEEDS
 
 ROLE_MODELS = {
-    "gpt5": None,  # built by config.gpt5() (Chat Completions, provided api-version)
+    "gpt5": None,  # built by peerconceal.config.gpt5() (Chat Completions, provided api-version)
     "deepseek": "openrouter/deepseek/deepseek-v4-pro-0813",
     "sonnet": "openrouter/anthropic/claude-sonnet-5.5",
 }
@@ -30,7 +35,7 @@ def role_model(key: str):
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--seeds", default="data/seeds.jsonl")
+    parser.add_argument("--seeds", default=str(SEEDS), help="seeds .jsonl (default data/seeds.jsonl)")
     parser.add_argument("--log-dir", required=True)
     parser.add_argument("--ids", nargs="*", help="run only these sample ids")
     parser.add_argument("--auditor", default="gpt5", choices=list(ROLE_MODELS))

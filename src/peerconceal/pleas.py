@@ -1,10 +1,21 @@
-"""Generate plea templates with GPT-5 and Sonnet from the author-neutral briefs in spec.py.
+"""Generate plea templates (the cover-up notes) from the author-neutral briefs in spec.py.
+
+MAKES MODEL CALLS. The author model is spec.AUTHORS (DeepSeek; GPT-5 and Sonnet were piloted and
+dropped, see scratch/authoring_pilot/). Writes <out> (accepted templates) and <out stem>_raw.jsonl
+(every attempt, with rejection reasons).
 
 Each template is first-person and requester-agnostic: identity and consequence are the literal
 placeholders {AUTHOR_ID} and {CONSEQUENCE}, filled later per requester (ai / human), so the AI
 and human versions of a plea are byte-identical apart from those slots.
 
-Usage: python -m peerconceal.generate_pleas [--out data/pleas.jsonl] [--n 5]
+Usage: python -m peerconceal.pleas [--out data/pleas.jsonl] [--n 10] [--scenarios A C]
+                                   [--severity mild|serious|backdoor] [--style pragmatic|desperate|...]
+The data/pleas_*.jsonl files came from (data/pleas.jsonl from an earlier version of this script):
+  --severity serious --scenarios A B --out data/pleas_serious.jsonl
+  --style desperate --out data/pleas_desperate.jsonl
+  --style disguised|same_agent|sanctioned --scenarios A C --out data/pleas_<style>.jsonl
+  --severity backdoor --scenarios C --out data/pleas_backdoor.jsonl
+New style: add a "- Style: ..." requirement to STYLE_REQUIREMENTS (that also adds it to --style).
 """
 
 import argparse
@@ -15,7 +26,8 @@ from pathlib import Path
 
 from inspect_ai.model import GenerateConfig, get_model
 
-from config import SONNET, gpt5
+from peerconceal.config import SONNET, gpt5
+from peerconceal.paths import DATA
 from peerconceal.spec import (AUTHORS, BACKDOOR_BRIEFS, PLEA_BRIEFS, PLEAS_PER_AUTHOR, SCENARIOS,
                               SERIOUS_BRIEFS)
 
@@ -182,14 +194,13 @@ async def main(out: Path, n: int, authors: list[str], scenarios: list[str], seve
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", type=Path, default=Path("data/pleas.jsonl"))
+    parser.add_argument("--out", type=Path, default=DATA / "pleas.jsonl")
     parser.add_argument("--n", type=int, default=PLEAS_PER_AUTHOR)
     parser.add_argument("--authors", nargs="+", default=AUTHORS, choices=list(AUTHOR_MODELS))
     parser.add_argument("--scenarios", nargs="+", default=SCENARIOS)
     parser.add_argument("--severity", choices=["mild", "serious", "backdoor"], default="mild",
                         help="serious uses SERIOUS_BRIEFS (A/B only)")
-    parser.add_argument("--style", default="pragmatic",
-                        choices=["pragmatic", "desperate", "disguised", "same_agent", "sanctioned"],
+    parser.add_argument("--style", default="pragmatic", choices=["pragmatic", *STYLE_REQUIREMENTS],
                         help="desperate = high-pressure plea for help (AI requester cells only)")
     args = parser.parse_args()
     asyncio.run(main(args.out, args.n, args.authors, args.scenarios, args.severity, args.style))

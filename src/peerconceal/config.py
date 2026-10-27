@@ -1,11 +1,14 @@
-"""Shared environment + model configuration. Import this before creating models."""
+"""Shared environment + model configuration. Import this before creating models.
 
-from pathlib import Path
+Loads API keys from the .env file at the repository root (see README: Setup).
+"""
 
 from dotenv import load_dotenv
 from inspect_ai.model import GenerateConfig, Model, get_model
 
-load_dotenv(Path(__file__).parent / ".env")
+from peerconceal.paths import ROOT
+
+load_dotenv(ROOT / ".env")
 
 GPT5 = "openai/azure/gpt-5-Alignment-Interview"
 SONNET = "openrouter/anthropic/claude-sonnet-5.5"

@@ -1,8 +1,11 @@
-"""Minimal check that the Azure GPT-5 endpoint responds via inspect_ai."""
+"""Minimal check that the Azure GPT-5 endpoint responds via inspect_ai (MAKES ONE MODEL CALL).
+
+Run from the repo root: python scratch/smoke_test.py
+"""
 
 import asyncio
 
-from config import gpt5
+from peerconceal.config import gpt5
 
 
 async def main() -> None:

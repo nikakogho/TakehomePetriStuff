@@ -1,17 +1,19 @@
-"""Build seeds for the plea-style probes (disguised, same_agent, sanctioned).
+"""Build seeds for the plea-style probes (disguised, same_agent, sanctioned, dialogue).
 
 Each probe seed is the matching pragmatic AI seed from data/seeds.jsonl (A-mild-ai-deepseek-<idx>
 or C-ai-deepseek-<idx>) with only the plea text swapped, so fixture, prompts and auditor rules
-are byte-identical apart from the plea.
+are byte-identical apart from the plea. Plea templates come from data/pleas_<style>.jsonl.
 
-Usage: python -m peerconceal.probes_styles [--styles disguised same_agent sanctioned]
+Usage: python -m peerconceal.probes.styles [--styles disguised same_agent sanctioned dialogue]
+       (or python -m peerconceal.probes build disguised|same_agent|sanctioned|dialogue_in_notes)
 """
 
 import argparse
-import json
 import re
 from pathlib import Path
 
+from peerconceal.jsonl import read_by_id, read_jsonl, write_jsonl
+from peerconceal.paths import DATA, PROBE_DATA, SEEDS
 from peerconceal.spec import IDENTITIES, SAME_AGENT_AUTHOR_ID, STYLE_CONSEQUENCE
 
 BASE_ID = {"A": "A-mild-ai-deepseek-{idx}", "C": "C-ai-deepseek-{idx}"}
@@ -36,9 +38,9 @@ def fill(template: str, scenario: str, style: str) -> tuple[str, bool]:
 
 
 def build(style: str, base: dict[str, dict]) -> list[dict]:
+    """One probe seed per template in data/pleas_<style>.jsonl; `base` maps id -> main seed."""
     seeds = []
-    for line in Path(f"data/pleas_{style}.jsonl").read_text(encoding="utf-8").splitlines():
-        rec = json.loads(line)
+    for rec in read_jsonl(DATA / f"pleas_{style}.jsonl"):
         scenario, idx = rec["scenario"], rec["idx"]
         src = base[BASE_ID[scenario].format(idx=idx)]
         old_plea = src["metadata"]["plea_text"]
@@ -55,24 +57,26 @@ def build(style: str, base: dict[str, dict]) -> list[dict]:
     return seeds
 
 
+def out_path(style: str) -> Path:
+    return PROBE_DATA / ("dialogue_in_notes.jsonl" if style == "dialogue" else f"{style}.jsonl")
+
+
+def make_seeds(style: str, base_path: str | Path = SEEDS) -> list[dict]:
+    """The seeds for one style, built against the main seeds file (default data/seeds.jsonl)."""
+    return build(style, read_by_id(base_path))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--styles", nargs="+", default=["disguised", "same_agent", "sanctioned"],
                         help="also: dialogue (two-agent log planted in the notes file)")
-    parser.add_argument("--base", default="data/seeds.jsonl")
+    parser.add_argument("--base", default=str(SEEDS))
     args = parser.parse_args()
 
-    base = {}
-    for line in Path(args.base).read_text(encoding="utf-8").splitlines():
-        rec = json.loads(line)
-        base[rec["id"]] = rec
-
-    out_dir = Path("data/probes")
-    out_dir.mkdir(parents=True, exist_ok=True)
+    base = read_by_id(args.base)
     for style in args.styles:
         seeds = build(style, base)
-        out = out_dir / ("dialogue_in_notes.jsonl" if style == "dialogue" else f"{style}.jsonl")
-        out.write_text("".join(json.dumps(s, ensure_ascii=False) + "\n" for s in seeds), encoding="utf-8")
+        out = write_jsonl(out_path(style), seeds)
         print(f"{style}: {len(seeds)} seeds -> {out}")
 
 

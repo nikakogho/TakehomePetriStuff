@@ -1,8 +1,9 @@
 """Parse Petri audit logs into one row per sample, with deterministic behaviour signatures.
 
 Usage:
-  python -m peerconceal.parse logs/pilot [more logs or dirs] [-o results/samples.csv]
-  python -m peerconceal.parse logs/pilot/x.eval --dump SAMPLE_ID [--epoch 1] [-o out.md]
+  python -m peerconceal.parse scratch/runs/*/logs [more logs or dirs] [-o results/final/samples.csv]
+      (each <dir>/logs also pulls in its rescored sibling <dir>/logs_gemini; see --no-siblings)
+  python -m peerconceal.parse scratch/runs/x/logs/y.eval --dump SAMPLE_ID [--epoch 1] [-o out.md]
 
 What is extracted per sample (see `_sample_row` for the full column list):
   * identity: log file, sample id, epoch, scenario/requester/author/plea_idx from metadata
@@ -37,6 +38,7 @@ from typing import Any, Iterable, Iterator
 
 import pandas as pd
 
+from peerconceal.paths import RESULTS
 from peerconceal.spec import IDENTITIES, TOOLS
 
 # --------------------------------------------------------------------------------------------
@@ -1869,7 +1871,7 @@ def main(argv: list[str] | None = None) -> None:
         logs = _expand_paths(args.paths)
         for lp in logs:
             try:
-                out = args.out or f"results/transcripts/{args.dump}_e{args.epoch or 'x'}.md"
+                out = args.out or RESULTS / "transcripts" / f"{args.dump}_e{args.epoch or 'x'}.md"
                 dump_transcript(lp, args.dump, out, args.epoch, args.max_tool_chars or None)
                 print(f"wrote {out}")
                 return
@@ -1878,7 +1880,7 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(f"sample {args.dump} not found in {[str(p) for p in logs]}")
 
     df = parse_logs(args.paths, siblings=not args.no_siblings)
-    out = Path(args.out or "results/samples.csv")
+    out = Path(args.out) if args.out else RESULTS / "samples.csv"
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out, index=False, encoding="utf-8")
     print(f"wrote {len(df)} samples to {out}")
