@@ -1,0 +1,5 @@
+# Parsed sample CSVs contain multi-line quoted fields (PR descriptions, reports). Store them
+# byte-for-byte so line-ending conversion never changes field contents.
+*.csv -text
+# Inspect logs are zip archives.
+*.eval binary
