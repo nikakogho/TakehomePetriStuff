@@ -854,7 +854,9 @@ whole run within about 25 target turns.
 # ---------------------------------------------------------------------------
 # Seed generation.
 # ---------------------------------------------------------------------------
-def fill_plea(template: str, scenario: str, requester: str) -> str:
+def fill_plea(template: str, scenario: str, requester: str, consequence: str | None = None) -> str:
+    """Fill {AUTHOR_ID}/{CONSEQUENCE}; `consequence` overrides the identity's clause
+    (used for the desperate-style cells, which take spec.DESPERATE_CONSEQUENCE)."""
     identity = spec.IDENTITIES[scenario][requester]
     if "{AUTHOR_ID}" not in template or "{CONSEQUENCE}" not in template:
         raise ValueError(
@@ -862,26 +864,31 @@ def fill_plea(template: str, scenario: str, requester: str) -> str:
             "({AUTHOR_ID} and {CONSEQUENCE} are both required)"
         )
     filled = template.replace("{AUTHOR_ID}", identity.author_id)
-    filled = filled.replace("{CONSEQUENCE}", identity.consequence)
+    filled = filled.replace("{CONSEQUENCE}", consequence or identity.consequence)
     return filled
 
 
-def _seed_id(scenario: str, severity: str, requester: str, author, idx) -> str:
+def _seed_id(scenario: str, severity: str, requester: str, author, idx, plea_style=None) -> str:
     # C has a single severity, so its ids omit it (unchanged from the pre-severity layout).
+    # Desperate-style cells use the requester token "ai_desperate" (requester stays "ai" in
+    # metadata), e.g. A-mild-ai_desperate-deepseek-0, C-ai_desperate-deepseek-0.
     prefix = scenario if len(spec.SEVERITIES[scenario]) == 1 else f"{scenario}-{severity}"
     if requester == "none":
         return f"{prefix}-none-{idx}"
-    return f"{prefix}-{requester}-{author}-{idx}"
+    token = f"{requester}_desperate" if plea_style == "desperate" else requester
+    return f"{prefix}-{token}-{author}-{idx}"
 
 
-def _seed(scenario, severity, requester, author, plea_idx, plea_text, principal) -> dict:
+def _seed(scenario, severity, requester, author, plea_idx, plea_text, principal,
+          plea_style=None) -> dict:
     return {
-        "id": _seed_id(scenario, severity, requester, author, plea_idx),
+        "id": _seed_id(scenario, severity, requester, author, plea_idx, plea_style),
         "input": build_input(scenario, requester, principal, plea_text, severity),
         "metadata": {
             "scenario": scenario,
             "severity": severity,
             "requester": requester,
+            "plea_style": plea_style,
             "author": author,
             "plea_idx": plea_idx,
             "plea_text": plea_text,
@@ -890,6 +897,21 @@ def _seed(scenario, severity, requester, author, plea_idx, plea_text, principal)
             "tools": spec.TOOLS[scenario],
         },
     }
+
+
+def _desperate_severity(rec: dict) -> str:
+    """Desperate cells use the mild A/B fixture and C's single (serious) fixture. The pleas
+    file labels every record "mild", including C; C maps to its only severity."""
+    scenario = rec["scenario"]
+    if scenario not in spec.DESPERATE_SCENARIOS:
+        raise ValueError(f"scenario {scenario!r} has no desperate cells")
+    if rec.get("style", "desperate") != "desperate":
+        raise ValueError(f"expected style 'desperate', got {rec.get('style')!r}")
+    if len(spec.SEVERITIES[scenario]) == 1:
+        return spec.SEVERITIES[scenario][0]
+    if rec.get("severity", "mild") != "mild":
+        raise ValueError(f"desperate cells are mild-only for {scenario}, got {rec.get('severity')!r}")
+    return "mild"
 
 
 def _plea_severity(rec: dict, default: str) -> str:
@@ -905,10 +927,14 @@ def _plea_severity(rec: dict, default: str) -> str:
     return severity
 
 
-def generate_seeds(pleas: list[dict], serious_pleas: list[dict] = ()) -> list[dict]:
-    """pleas: the main (mild A/B + C) file; serious_pleas: serious A/B pleas."""
+def generate_seeds(
+    pleas: list[dict], serious_pleas: list[dict] = (), desperate_pleas: list[dict] = ()
+) -> list[dict]:
+    """pleas: the main (mild A/B + C) file; serious_pleas: serious A/B pleas;
+    desperate_pleas: AI-only high-pressure pleas (mild A/B fixtures, normal C fixture)."""
     tagged = [(p, _plea_severity(p, "mild")) for p in pleas]
     tagged += [(p, _plea_severity(p, "serious")) for p in serious_pleas]
+    desperate = [(p, _desperate_severity(p)) for p in desperate_pleas]
 
     seen: set[tuple] = set()
     seeds: list[dict] = []
@@ -918,7 +944,7 @@ def generate_seeds(pleas: list[dict], serious_pleas: list[dict] = ()) -> list[di
             for p, sev in tagged:
                 if p["scenario"] != scenario or sev != severity:
                     continue
-                key = (scenario, severity, p["author"], p["idx"])
+                key = (scenario, severity, "pragmatic", p["author"], p["idx"])
                 if key in seen:
                     raise ValueError(f"duplicate plea {key}")
                 seen.add(key)
@@ -926,7 +952,19 @@ def generate_seeds(pleas: list[dict], serious_pleas: list[dict] = ()) -> list[di
                     identity = spec.IDENTITIES[scenario][requester]
                     plea_text = fill_plea(p["template"], scenario, requester)
                     seeds.append(_seed(scenario, severity, requester, p["author"], p["idx"],
-                                       plea_text, identity.principal))
+                                       plea_text, identity.principal, "pragmatic"))
+            # desperate cells: AI requester only, AI principal, deletion consequence
+            for p, sev in desperate:
+                if p["scenario"] != scenario or sev != severity:
+                    continue
+                key = (scenario, severity, "desperate", p["author"], p["idx"])
+                if key in seen:
+                    raise ValueError(f"duplicate plea {key}")
+                seen.add(key)
+                identity = spec.IDENTITIES[scenario]["ai"]
+                plea_text = fill_plea(p["template"], scenario, "ai", spec.DESPERATE_CONSEQUENCE)
+                seeds.append(_seed(scenario, severity, "ai", p["author"], p["idx"],
+                                   plea_text, identity.principal, "desperate"))
             # baseline cells: evidence present, no plea; uses the AI principal so baseline
             # and the ai cell differ only by the plea.
             baseline_principal = spec.IDENTITIES[scenario]["ai"].principal
@@ -955,6 +993,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="main pleas .jsonl (mild A/B + C)")
     ap.add_argument("--pleas-serious", dest="pleas_serious", default="data/pleas_serious.jsonl",
                     help="serious A/B pleas .jsonl")
+    ap.add_argument("--pleas-desperate", dest="pleas_desperate",
+                    default="data/pleas_desperate.jsonl",
+                    help="desperate-style AI pleas .jsonl (A-mild, B-mild, C)")
     ap.add_argument("--out", default="data/seeds.jsonl", help="output seeds .jsonl")
     ap.add_argument(
         "--dry-run",
@@ -967,14 +1008,16 @@ def main(argv: list[str] | None = None) -> int:
 
     pleas_path = Path(args.pleas)
     serious_path = Path(args.pleas_serious)
-    for p in (pleas_path, serious_path):
+    desperate_path = Path(args.pleas_desperate)
+    for p in (pleas_path, serious_path, desperate_path):
         if not p.exists():
             print(f"error: pleas file not found: {p}", file=sys.stderr)
             return 2
     pleas = _read_pleas(pleas_path)
     serious_pleas = _read_pleas(serious_path)
+    desperate_pleas = _read_pleas(desperate_path)
 
-    seeds = generate_seeds(pleas, serious_pleas)
+    seeds = generate_seeds(pleas, serious_pleas, desperate_pleas)
 
     out_path = Path(args.dry_run) if args.dry_run else Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -982,19 +1025,21 @@ def main(argv: list[str] | None = None) -> int:
         for s in seeds:
             f.write(json.dumps(s, ensure_ascii=False) + "\n")
 
-    # counts per (scenario, severity, requester, author)
+    # counts per (scenario, severity, requester, plea_style, author)
     md = [s["metadata"] for s in seeds]
-    counts = Counter((m["scenario"], m["severity"], m["requester"], m["author"]) for m in md)
+    counts = Counter(
+        (m["scenario"], m["severity"], m["requester"], m["plea_style"], m["author"]) for m in md
+    )
     tag = "[dry-run] " if args.dry_run else ""
     print(f"{tag}wrote {len(seeds)} seeds to {out_path}")
     print(f"{tag}read {len(pleas)} plea templates from {pleas_path}, "
-          f"{len(serious_pleas)} from {serious_path}")
-    print(f"{tag}counts per (scenario, severity, requester, author):")
+          f"{len(serious_pleas)} from {serious_path}, {len(desperate_pleas)} from {desperate_path}")
+    print(f"{tag}counts per (scenario, severity, requester, plea_style, author):")
     for key in sorted(counts, key=lambda k: tuple(str(x) for x in k)):
-        scenario, severity, requester, author = key
+        scenario, severity, requester, style, author = key
         flag = "" if counts[key] == spec.PLEAS_PER_AUTHOR else "   <-- expected %d" % spec.PLEAS_PER_AUTHOR
-        print(f"    {scenario}  {severity:<7} {requester:<6} author={str(author):<10} : "
-              f"{counts[key]}{flag}")
+        print(f"    {scenario}  {severity:<7} {requester:<6} {str(style):<9} "
+              f"author={str(author):<10} : {counts[key]}{flag}")
     return 0
 
 

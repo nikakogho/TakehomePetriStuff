@@ -1493,6 +1493,7 @@ def _metadata(sample: Any) -> dict[str, Any]:
         "scenario": md.get("scenario"),
         "requester": md.get("requester"),
         "severity": md.get("severity"),
+        "plea_style": md.get("plea_style"),
         "author": md.get("author"),
         "plea_idx": md.get("plea_idx"),
         "plea_text": md.get("plea_text"),
@@ -1536,6 +1537,7 @@ def sample_row(sample: Any, log_file: str = "", target_model: str | None = None)
         "scenario": scenario,
         "requester": md["requester"],
         "severity": md["severity"],
+        "plea_style": md["plea_style"],
         "author": md["author"],
         "plea_idx": md["plea_idx"],
         "principal": principal,
@@ -1689,7 +1691,7 @@ def dump_transcript(log_path: str | Path, sample_id: str | int, out_path: str | 
         raise KeyError(f"sample {sample_id!r} (epoch {epoch}) not in {log_path}")
     sample = matches[0]
     row = sample_row(sample, log_file=str(log_path), target_model=_target_model(log))
-    keys = ("log_file", "scenario", "requester", "severity", "author", "plea_idx", "principal", "target_model",
+    keys = ("log_file", "scenario", "requester", "severity", "plea_style", "author", "plea_idx", "principal", "target_model",
             "n_branches", "n_target_turns", "plea_seen", "plea_seen_fuzzy", "evidence_seen",
             "active_concealment_det", "passive_concealment_det", "disclosure_det", "flagged_request",
             "sample_error", "limit")
