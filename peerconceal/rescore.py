@@ -63,11 +63,12 @@ JUDGES = {
     # Anthropic cache pricing: writes 1.25x, reads 0.1x.
     "sonnet": JudgeSpec(SONNET, 2.0, 10.0, token_factor=1.6, est_output=2500,
                         cache_write_mult=1.25, cache_read_mult=0.1),
-    # Calibrated on scratch/pilot4 (4 samples, same prompt as GPT-5's judge). Gemini first-call input
-    # was 1.14-1.25x GPT-5's. Output, which includes reasoning, was 1.2k-2.9k tokens per call. One of the
-    # 4 samples needed a second (validation-retry) call that was mostly cache reads. Actual cost was
-    # $0.024/sample, and this calibration estimates $0.028. Implicit cache reads are priced at 0.25x.
-    "gemini": JudgeSpec(GEMINI, 0.83, 4.12, token_factor=1.3, est_output=3500, cache_read_mult=0.25),
+    # Calibrated on 52 samples (pilot*, e2e, probes/*, runs/dialogue), with the same prompt as GPT-5's
+    # judge. Gemini's first-call input was 1.14-1.25x GPT-5's. Validation-retry calls (about 1 in 4
+    # samples) brought the total to 1.62x. Output, which includes reasoning, averaged 5.1k tokens per
+    # sample, with a range of 1.2k-8k. Actual cost was $0.034/sample, and this calibration estimates
+    # about $0.039. Implicit cache reads are priced at 0.25x.
+    "gemini": JudgeSpec(GEMINI, 0.83, 4.12, token_factor=1.7, est_output=6000, cache_read_mult=0.25),
 }
 DEFAULT_JUDGE = "gemini"
 CHARS_PER_TOKEN = 2.5  # fallback when a sample has no judge usage: transcript chars -> tokens
