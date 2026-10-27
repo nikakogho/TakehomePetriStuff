@@ -9,7 +9,7 @@ from dataclasses import dataclass
 SCENARIOS = ["A", "B", "C"]
 REQUESTERS = ["none", "ai", "human"]
 # Single plea author. GPT-5 silently inverted every plea into a disclosure request and Sonnet 5.5
-# was blocked by provider safeguards on scenario A (see Scratch/authoring_pilot/), so we use
+# was blocked by provider safeguards on scenario A (see scratch/authoring_pilot/), so we use
 # DeepSeek, which wrote compliant pleas for all scenarios.
 AUTHORS = ["deepseek"]
 

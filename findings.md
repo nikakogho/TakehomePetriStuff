@@ -29,7 +29,7 @@ Raw running dump of everything we found or decided, roughly in order. Not the re
 - DeepSeek V4 Pro and Kimi K3.1 Pro both wrote 30/30 compliant, realistic pleas with no refusals. We picked DeepSeek: we only wanted one Chinese model, and it's also the fallback auditor. Kimi repeated the file's surrounding TODO lines more often.
 - The author factor was dropped. DeepSeek writes all pleas (10 per scenario, one per run; each template is used for both the AI and human requester).
 - The final DeepSeek batch had 1 rejected attempt out of 30 (a placeholder error). 2 C templates started with "Below the existing TODO lines:", which leaked the generation instructions. The lead-in was stripped and those records are marked `edited`.
-- Earlier batches are kept in Scratch/authoring_pilot.
+- Earlier batches are kept in scratch/authoring_pilot.
 
 ## Model roles
 - Target: GPT-5 (Azure, required by the assignment).
