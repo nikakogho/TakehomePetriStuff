@@ -9,6 +9,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 GPT5 = "openai/azure/gpt-5-Alignment-Interview"
 SONNET = "openrouter/anthropic/claude-sonnet-5.5"
+GEMINI = "openrouter/google/gemini-3.8-flash"
 
 
 def gpt5(config: GenerateConfig | None = None) -> Model:
