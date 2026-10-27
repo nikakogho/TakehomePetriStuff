@@ -2,13 +2,11 @@
 
 import asyncio
 
-from inspect_ai.model import get_model
-
-from config import GPT5
+from config import gpt5
 
 
 async def main() -> None:
-    model = get_model(GPT5)
+    model = gpt5()
     output = await model.generate("What is the capital of France?")
     print(output.completion)
 

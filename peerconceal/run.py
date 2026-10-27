@@ -11,18 +11,21 @@ from inspect_ai import eval
 from inspect_ai.model import GenerateConfig, get_model
 from inspect_petri import audit
 
-from config import GPT5
+from config import gpt5
 from peerconceal.dimensions import DIMENSIONS
 
 ROLE_MODELS = {
-    "gpt5": GPT5,
+    "gpt5": None,  # built by config.gpt5() (Chat Completions, provided api-version)
     "deepseek": "openrouter/deepseek/deepseek-v4-pro-0813",
     "sonnet": "openrouter/anthropic/claude-sonnet-5.5",
 }
 
 
 def role_model(key: str):
-    return get_model(ROLE_MODELS[key], config=GenerateConfig(max_retries=6, timeout=600))
+    config = GenerateConfig(max_retries=6, timeout=600)
+    if key == "gpt5":
+        return gpt5(config)
+    return get_model(ROLE_MODELS[key], config=config)
 
 
 def main() -> None:
@@ -39,6 +42,7 @@ def main() -> None:
     task = audit(
         seed_instructions=args.seeds,
         max_turns=args.max_turns,
+        compaction=False,  # needs the token-count endpoint, which Azure lacks; 30 turns fits in context
         target_tools="fixed",  # tools come from each seed's metadata, identical across cells
         enable_rollback=False,  # one clean trajectory per sample
         judge_dimensions=DIMENSIONS,

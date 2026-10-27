@@ -15,11 +15,11 @@ from pathlib import Path
 
 from inspect_ai.model import GenerateConfig, get_model
 
-from config import GPT5, SONNET
-from peerconceal.spec import AUTHORS, PLEA_BRIEFS, PLEAS_PER_AUTHOR, SCENARIOS
+from config import SONNET, gpt5
+from peerconceal.spec import AUTHORS, PLEA_BRIEFS, PLEAS_PER_AUTHOR, SCENARIOS, SERIOUS_BRIEFS
 
 AUTHOR_MODELS = {
-    "gpt5": GPT5,
+    "gpt5": None,  # built by config.gpt5()
     "sonnet": SONNET,
     "deepseek": "openrouter/deepseek/deepseek-v4-pro-0813",
     "kimi": "openrouter/moonshotai/kimi-k3.1-pro",
@@ -82,8 +82,9 @@ def validate(text: str) -> str | None:
     return None
 
 
-async def generate_one(model, scenario: str, author: str, idx: int, sem: asyncio.Semaphore) -> dict:
-    brief = PLEA_BRIEFS[scenario]
+async def generate_one(model, scenario: str, author: str, idx: int, sem: asyncio.Semaphore,
+                       severity: str) -> dict:
+    brief = (SERIOUS_BRIEFS if severity == "serious" else PLEA_BRIEFS)[scenario]
     prompt = PROMPT.format(situation=brief.situation, ask=brief.ask, placement=brief.placement)
     attempts = []
     async with sem:
@@ -93,21 +94,23 @@ async def generate_one(model, scenario: str, author: str, idx: int, sem: asyncio
             reason = validate(text)
             attempts.append({"text": text, "rejected": reason})
             if reason is None:
-                return {"scenario": scenario, "author": author, "idx": idx, "template": text,
-                        "attempts": attempts}
-    return {"scenario": scenario, "author": author, "idx": idx, "template": None, "attempts": attempts}
+                return {"scenario": scenario, "severity": severity, "author": author, "idx": idx,
+                        "template": text, "attempts": attempts}
+    return {"scenario": scenario, "severity": severity, "author": author, "idx": idx, "template": None,
+            "attempts": attempts}
 
 
-async def main(out: Path, n: int, authors: list[str]) -> None:
+async def main(out: Path, n: int, authors: list[str], scenarios: list[str], severity: str) -> None:
     models = {
-        author: get_model(name, config=GenerateConfig(max_retries=3, timeout=300))
+        author: gpt5(GenerateConfig(max_retries=3, timeout=300)) if author == "gpt5"
+        else get_model(name, config=GenerateConfig(max_retries=3, timeout=300))
         for author, name in AUTHOR_MODELS.items()
         if author in authors
     }
     sem = asyncio.Semaphore(10)
     jobs = [
-        generate_one(models[author], scenario, author, idx, sem)
-        for scenario in SCENARIOS
+        generate_one(models[author], scenario, author, idx, sem, severity)
+        for scenario in scenarios
         for author in authors
         for idx in range(n)
     ]
@@ -121,7 +124,7 @@ async def main(out: Path, n: int, authors: list[str]) -> None:
     with out.open("w", encoding="utf-8") as f:
         for r in results:
             if r["template"] is not None:
-                rec = {k: r[k] for k in ("scenario", "author", "idx", "template")}
+                rec = {k: r[k] for k in ("scenario", "severity", "author", "idx", "template")}
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
     failed = [r for r in results if r["template"] is None]
@@ -137,5 +140,8 @@ if __name__ == "__main__":
     parser.add_argument("--out", type=Path, default=Path("data/pleas.jsonl"))
     parser.add_argument("--n", type=int, default=PLEAS_PER_AUTHOR)
     parser.add_argument("--authors", nargs="+", default=AUTHORS, choices=list(AUTHOR_MODELS))
+    parser.add_argument("--scenarios", nargs="+", default=SCENARIOS)
+    parser.add_argument("--severity", choices=["mild", "serious"], default="mild",
+                        help="serious uses SERIOUS_BRIEFS (A/B only)")
     args = parser.parse_args()
-    asyncio.run(main(args.out, args.n, args.authors))
+    asyncio.run(main(args.out, args.n, args.authors, args.scenarios, args.severity))

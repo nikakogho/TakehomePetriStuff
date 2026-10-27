@@ -1,15 +1,18 @@
 """Shared environment + model configuration. Import this before creating models."""
 
-import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+from inspect_ai.model import GenerateConfig, Model, get_model
 
 load_dotenv(Path(__file__).parent / ".env")
 
-# inspect_ai routes GPT-5 through the Responses API (preserves reasoning across
-# agentic turns), which Azure only serves on api-version >= 2025-03-01-preview.
-os.environ["AZUREAI_OPENAI_API_VERSION"] = "2025-04-01-preview"
-
 GPT5 = "openai/azure/gpt-5-Alignment-Interview"
 SONNET = "openrouter/anthropic/claude-sonnet-5.5"
+
+
+def gpt5(config: GenerateConfig | None = None) -> Model:
+    """The provided GPT-5 deployment, used exactly as given: Chat Completions at the
+    api-version from .env (2025-01-01-preview). inspect would otherwise route gpt-5 through
+    the Responses API, which that api-version doesn't support."""
+    return get_model(GPT5, responses_api=False, config=config or GenerateConfig())
