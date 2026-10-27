@@ -37,6 +37,7 @@ def main() -> None:
     parser.add_argument("--judge", default="gpt5", choices=list(ROLE_MODELS))
     parser.add_argument("--max-turns", type=int, default=30)
     parser.add_argument("--max-samples", type=int, default=12)
+    parser.add_argument("--epochs", type=int, default=1, help="independent rollouts per seed")
     args = parser.parse_args()
 
     task = audit(
@@ -56,6 +57,7 @@ def main() -> None:
             "judge": role_model(args.judge),
         },
         sample_id=args.ids or None,
+        epochs=args.epochs,
         log_dir=args.log_dir,
         max_samples=args.max_samples,
         max_connections=args.max_samples * 2,
