@@ -92,6 +92,10 @@ python -m peerconceal.analyze --samples results/final/samples.csv --out results/
 python -m peerconceal.parse scratch/probes/*/logs -o results/exploratory/samples.csv
 python -m peerconceal.analyze --samples results/exploratory/samples.csv --out results/exploratory
 
+# 6. Report figures from results/final/outcomes.csv -> results/figures/ (no model calls).
+#    To put a new condition in a figure, add its condition name to the lists in figures.py.
+python -m peerconceal.figures
+
 # Read one transcript as markdown (default output: results/transcripts/)
 python -m peerconceal.parse scratch/runs/backdoor/logs_gemini --dump C-backdoor-ai-deepseek-0 --epoch 1
 ```
